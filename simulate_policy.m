@@ -1,24 +1,3 @@
-clear all
-format bank
-load('riskfree.mat')
-load('survProb.mat')
-
-%% PARAMS
-M            = 50;       % years of coverage
-N            = 10000000; % number of simulations
-RD           = 2/100;    % regular deduction
-COMM         = 1.4/100;  % commission fee
-x            = 60;       % age of policyholder
-fixedFees    = 50;       % yearly fees ex-inflation
-inflation    = 2/100;    % yearly inflation
-sigma        = 0.25;     % fund volatility
-probLapse    = 0.15;     % yearly lapse rate
-benefit_cost = 20;       % commission contingent on benefits
-guarantee    = 110/100;  % guaranteed return on premium (case of death)
-F0           = 100000;   % premium
-riskfree     = riskfree; % riskfree zero rates
-survProb     = survProb; % probabilities of survival
-
 %% SIMULATE LAPSE
 lapse  = rand(N,M);
 lapse  = lapse <= probLapse;
@@ -65,48 +44,59 @@ end
 lapseT(~lapseHappened) = size(F,2) + 100;
 deathT(~deathHappened) = size(F,2) + 100;
 
-benefitNPV = 0.*lapseT;
-revenueNPV = 0.*lapseT;
-expenseNPV = 0.*lapseT;
+benefitD = zeros(N,M);
+benefitL = zeros(N,M);
+benefit = zeros(N,M);
+revenue = zeros(N,M);
+expense = zeros(N,M);
 
-for ii=1:numel(benefitNPV)
+for ii=1:N
     
     % LAPSE
     % note: years with death+lapse are counted as lapse
     if (lapseT(ii) <= deathT(ii)) && (lapseT(ii) <= size(F,2))
         % lapse benefit = fund - cost
-        benefitNPV(ii) = (F(ii, lapseT(ii)) - benefit_cost)* discounts(lapseT(ii));
+        benefit(ii,lapseT(ii))  = F(ii, lapseT(ii)) - benefit_cost;
+        benefitL(ii,lapseT(ii)) = benefit(ii,lapseT(ii));
         
         % revenues and operating expenses
-        revenueNPV(ii) = sum(P(ii,1:lapseT(ii)).*discounts(1:lapseT(ii))) ...
-                         + benefit_cost*discounts(lapseT(ii));
-        expenseNPV(ii) = sum(fixedFees .* discounts(1:lapseT(ii)) .* (1 + inflation).^(1:lapseT(ii)));
+        revenue(ii,1:lapseT(ii)) = P(ii,1:lapseT(ii));
+        expense(ii,1:lapseT(ii)) = fixedFees .* discounts(1:lapseT(ii)) .* (1 + inflation).^(1:lapseT(ii));
     
     % DEATH
     elseif (deathT(ii) < lapseT(ii)) && (deathT(ii) <= size(F,2))
         % death benefit = fund (with guarantee) - cost
-        benefitNPV(ii) = (max(guarantee*F0, F(ii, deathT(ii))) - benefit_cost)* discounts(deathT(ii));
+        benefit(ii,deathT(ii)) = max(guarantee*premium, F(ii, deathT(ii))) - benefit_cost;
+        benefitD(ii,deathT(ii)) = benefit(ii,deathT(ii));
         
         % revenues and operating expenses
-        revenueNPV(ii) = sum(P(ii,1:deathT(ii)).*discounts(1:deathT(ii))) ...
-                         + benefit_cost*discounts(deathT(ii));
-        expenseNPV(ii) = sum(fixedFees .* discounts(1:deathT(ii)) .* (1 + inflation).^(1:deathT(ii)));
+        revenue(ii,1:deathT(ii)) = P(ii,1:deathT(ii));
+        expense(ii,1:deathT(ii)) = fixedFees .* discounts(1:deathT(ii)) .* (1 + inflation).^(1:deathT(ii));
     
     % NEITHER
     else
         % assume that all remaining policyholders lapse at the end of
         % the time horizon
-        benefitNPV(ii) = (F(ii,end)-benefit_cost)*discounts(end);
-                
+        benefit(ii,M) = F(ii, M) - benefit_cost;
+        benefitL(ii,M) = benefit(ii,M);
         % revenues and operating expenses
-        revenueNPV(ii) = sum(P(ii,1:M).*discounts(1:M)) ...
-                         + benefit_cost*discounts(M);
-        expenseNPV(ii) = sum(fixedFees .* discounts(1:M) .* (1 + inflation).^(1:M));
+        revenue(ii,1:M) = P(ii,1:M);
+        expense(ii,1:M) = fixedFees .* discounts(1:M) .* (1 + inflation).^(1:M);
     end
 end
 
-profitNPV = revenueNPV - expenseNPV;
-mean(benefitNPV);
-mean(profitNPV);
+deathNPV = mean(benefitD*discounts(1:M)');
+lapseNPV = mean(benefitL*discounts(1:M)');
+benefitNPV = mean(benefit*discounts(1:M)');
+revenueNPV = mean(revenue*discounts(1:M)');
+expenseNPV = mean(expense*discounts(1:M)');
 
-BEL = mean(benefitNPV) - mean(profitNPV);
+profitNPV = revenueNPV - expenseNPV;
+
+
+BEL    = benefitNPV - profitNPV;
+ASSETS = F0;
+BOF    = ASSETS - BEL;
+
+BEL_cfs = mean(benefit + expense - revenue,1);
+Mac_D = sum((1:M).*BEL_cfs.*discounts(1:M))/BEL;
