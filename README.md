@@ -18,19 +18,19 @@ CAT        100000.00      88051.79      11948.21             0          5.80
 Expense    100000.00      88131.14      11868.86             0          5.82
 ```
 
-## Submodules
+### Submodules
 ```
 SCR IR      SCR Equity  SCR Mortality   SCR Lapse    SCR Cat  SCR Expenses
  47.95       6986.10        213.68       2669.75        0           0
 ```
 
-## Modules
+### Modules
 ```
 SCR Life  SCR Market
  2678.29    7010.20
 ```
 
-## Basic
+### Basic
 ```
  BSCR
 8105.79
